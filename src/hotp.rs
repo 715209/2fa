@@ -1,6 +1,6 @@
 use crate::hmac_sha1::hmac_sha1;
 
-pub fn hotp(key: &[u8], counter: u64, digits: u32) -> u32 {
+pub fn hotp(key: &[u8], counter: usize, digits: u32) -> u32 {
     let hs = hmac_sha1(key, &counter.to_be_bytes());
     let snum = dt(&hs);
     snum % 10u32.pow(digits)
