@@ -1,0 +1,133 @@
+const BYTES_LENGTH_BLOCKS: usize = 64;
+const BYTE_LENGTH_OUTPUTS: usize = 20;
+
+pub fn hmac_sha1(key: &[u8], message: &[u8]) -> [u8; BYTE_LENGTH_OUTPUTS] {
+    let mut b_byte_string: [u8; BYTES_LENGTH_BLOCKS] = [0x00; BYTES_LENGTH_BLOCKS];
+
+    if key.len() > BYTES_LENGTH_BLOCKS {
+        b_byte_string[..BYTE_LENGTH_OUTPUTS]
+            .copy_from_slice(&sha1::Sha1::from(key).digest().bytes());
+    } else {
+        b_byte_string[..key.len()].copy_from_slice(&key);
+    };
+
+    let mut k_ipad = [0x36; BYTES_LENGTH_BLOCKS];
+    let mut k_opad = [0x5C; BYTES_LENGTH_BLOCKS];
+
+    for (i, b) in b_byte_string.iter().enumerate() {
+        k_ipad[i] ^= b;
+        k_opad[i] ^= b;
+    }
+
+    let mut hash = sha1::Sha1::new();
+    hash.update(&k_ipad);
+    hash.update(message);
+
+    let k_ihash = hash.digest().bytes();
+    hash.reset();
+
+    hash.update(&k_opad);
+    hash.update(&k_ihash);
+
+    hash.digest().bytes()
+}
+
+// Test cases from RFC 2202
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_case_1() {
+        assert_eq!(
+            hmac_sha1(&[0x0b; 20], b"Hi There"),
+            [
+                0xb6, 0x17, 0x31, 0x86, 0x55, 0x05, 0x72, 0x64, 0xe2, 0x8b, 0xc0, 0xb6, 0xfb, 0x37,
+                0x8c, 0x8e, 0xf1, 0x46, 0xbe, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_case_2() {
+        assert_eq!(
+            hmac_sha1(b"Jefe", b"what do ya want for nothing?"),
+            [
+                0xEF, 0xFC, 0xDF, 0x6A, 0xE5, 0xEB, 0x2F, 0xA2, 0xD2, 0x74, 0x16, 0xD5, 0xF1, 0x84,
+                0xDF, 0x9C, 0x25, 0x9A, 0x7C, 0x79
+            ]
+        );
+    }
+
+    #[test]
+    fn test_case_3() {
+        assert_eq!(
+            hmac_sha1(&[0xaa; 20], &[0xdd; 50]),
+            [
+                0x12, 0x5D, 0x73, 0x42, 0xB9, 0xAC, 0x11, 0xCD, 0x91, 0xA3, 0x9A, 0xF4, 0x8A, 0xA1,
+                0x7B, 0x4F, 0x63, 0xF1, 0x75, 0xD3
+            ]
+        );
+    }
+
+    #[test]
+    fn test_case_4() {
+        assert_eq!(
+            hmac_sha1(
+                &[
+                    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+                    0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19
+                ],
+                &[0xcd; 50]
+            ),
+            [
+                0x4C, 0x90, 0x07, 0xF4, 0x02, 0x62, 0x50, 0xC6, 0xBC, 0x84, 0x14, 0xF9, 0xBF, 0x50,
+                0xC8, 0x6C, 0x2D, 0x72, 0x35, 0xDA
+            ]
+        );
+    }
+
+    #[test]
+    fn test_case_5() {
+        let res = hmac_sha1(&[0x0c; 20], b"Test With Truncation");
+        assert_eq!(
+            res,
+            [
+                0x4C, 0x1A, 0x03, 0x42, 0x4B, 0x55, 0xE0, 0x7F, 0xE7, 0xF2, 0x7B, 0xE1, 0xD5, 0x8B,
+                0xB9, 0x32, 0x4A, 0x9A, 0x5A, 0x04
+            ]
+        );
+
+        assert_eq!(
+            res[..12],
+            [0x4C, 0x1A, 0x03, 0x42, 0x4B, 0x55, 0xE0, 0x7F, 0xE7, 0xF2, 0x7B, 0xE1]
+        );
+    }
+
+    #[test]
+    fn test_case_6() {
+        assert_eq!(
+            hmac_sha1(
+                &[0xaa; 80],
+                b"Test Using Larger Than Block-Size Key - Hash Key First"
+            ),
+            [
+                0xAA, 0x4A, 0xE5, 0xE1, 0x52, 0x72, 0xD0, 0x0E, 0x95, 0x70, 0x56, 0x37, 0xCE, 0x8A,
+                0x3B, 0x55, 0xED, 0x40, 0x21, 0x12
+            ]
+        );
+    }
+
+    #[test]
+    fn test_case_7() {
+        let message = b"Test Using Larger Than Block-Size Key and Larger Than One Block-Size Data";
+
+        assert_eq!(
+            hmac_sha1(&[0xaa; 80], message),
+            [
+                0xE8, 0xE9, 0x9D, 0x0F, 0x45, 0x23, 0x7D, 0x78, 0x6D, 0x6B, 0xBA, 0xA7, 0x96, 0x5C,
+                0x78, 0x08, 0xBB, 0xFF, 0x1A, 0x91
+            ]
+        );
+    }
+}
